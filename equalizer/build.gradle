@@ -1,51 +1,99 @@
-apply plugin: 'com.android.library'
-apply plugin: 'com.github.dcendents.android-maven'
-group="com.github.mosamabinomar"
-version="2.0"
+plugins {
+    id 'com.android.library'
+    id 'maven-publish'
+}
 
 android {
-    compileSdkVersion 30
-    defaultConfig {
-        minSdkVersion 21
-        targetSdkVersion 30
-        versionCode 1
-        versionName "1.0.0"
-
+    namespace 'com.example.equalizer'
+    compileSdk {
+        version = release(37)
     }
 
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+    defaultConfig {
+        minSdk 29
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles "consumer-rules.pro"
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+	
+	publishing {
+        singleVariant("release")
+    }
+
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            release(MavenPublication) {
+                from components.release
+                groupId = 'com.github.kent109'
+                artifactId = 'equalizer'
+                version = '1.0.0'
+            }
         }
     }
-
-}
-// build a jar with source files
-task sourcesJar(type: Jar) {
-    from android.sourceSets.main.java.srcDirs
-    classifier = 'sources'
-}
-task javadoc(type: Javadoc) {
-    failOnError  false
-    source = android.sourceSets.main.java.sourceFiles
-    classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
-    classpath += configurations.compile
 }
 
-// build a jar with javadoc
-task javadocJar(type: Jar, dependsOn: javadoc) {
-    classifier = 'javadoc'
-    from javadoc.destinationDir
-}
-artifacts {
-    archives sourcesJar
-    archives javadocJar
-}
 dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation 'androidx.appcompat:appcompat:1.2.0'
-    implementation 'com.diogobernardino:williamchart:2.2'
-    implementation 'com.h6ah4i.android.widget.verticalseekbar:verticalseekbar:0.7.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.10.0'
+    // williamchart 2.2 官方 AAR 是"混合打包"：类在 com.db.chart 包，但 R$dimen/R$styleable
+    // 引用指向 com.db.williamchart.R —— 只有按正常 AAR 依赖、由 AGP 从其 R.txt 生成 R 类才能解析。
+    // 物理打进 fat AAR 会永远缺 R（stub R$dimen 的 id=0 在运行时 getDimension 会崩）。
+    // 故 williamchart 走 Maven 依赖：用 api 进入发布 POM，消费方按坐标依赖 equalizer 时
+    // 自动传递解析，正式使用仍是一行依赖。
+    api 'com.diogobernardino:williamchart:2.2'
+    // verticalseekbar 0.7.0 无混合引用问题（仅引用自身包的 R$styleable，已用 stub R 补齐进 jar），
+    // 可安全物理打包。jar 已在本机经 AGP Jetifier 转为 AndroidX（android/support 残留=0），
+    // 消费方无需开启 Jetifier。compileOnly：仅参与自身编译、不进 POM，由 fattenReleaseAar 打进 AAR。
+    compileOnly files('libs/verticalseekbar.jar')
+}
 
+// equalizer 是 library 模块，AGP 不会把本地 jar 依赖合并进 AAR 的 classes.jar，
+// 导致消费方 R8 报 Missing class com.db.chart.* / com.h6ah4i.*。
+// 本任务在 bundleReleaseAar 之后，把 libs/ 下两个已转 AndroidX 的 jar
+// 合并进 AAR 的 classes.jar 并重新打包，使产物自包含：
+// 消费方只需 implementation 'com.github.kent109:equalizer:1.0.0' 一行依赖即可，
+// 且因类已转 AndroidX，消费方也无需开启 Jetifier。
+tasks.register('fattenReleaseAar') {
+    dependsOn 'bundleReleaseAar'
+    doLast {
+        def aarFile = file("${buildDir}/outputs/aar/equalizer-release.aar")
+        def tmp = file("${buildDir}/fatten-tmp")
+        tmp.deleteDir(); tmp.mkdirs()
+        // 1. 解压 AAR
+        ant.unzip(src: aarFile, dest: tmp)
+        // 2. 把 libs 下 verticalseekbar.jar（已转 AndroidX）解压到 ext 目录
+        def ext = file("$tmp/ext"); ext.mkdirs()
+        def libCount = 0
+        fileTree(dir: file('libs'), include: ['*.jar']).each { f ->
+            libCount++
+            ant.unzip(src: f.absolutePath, dest: ext, overwrite: true)
+        }
+        def extClasses = fileTree(dir: ext, include: ['**/*.class']).files.size()
+        println "[fatten] libs jars=${libCount}, ext class files=${extClasses}, aarFile exists=${aarFile.exists()}"
+        // 3. 合并进 classes.jar（用 ant.zip basedir 直接打目录，避免 File->zipfileset 歧义导致依赖被静默忽略）
+        def classesJar = new File(tmp, 'classes.jar')
+        ant.zip(destfile: classesJar, update: true, basedir: ext)
+        def mergedCount = 0
+        new java.util.zip.ZipFile(classesJar).withCloseable { zf ->
+            zf.entries().each { e -> if (e.name.endsWith('.class')) mergedCount++ }
+        }
+        println "[fatten] merged class count=${mergedCount}"
+        // 4. 清理临时目录后重新打包 AAR
+        ext.deleteDir()
+        ant.zip(destfile: aarFile, update: false, basedir: tmp)
+        tmp.deleteDir()
+    }
+}
+
+// assembleRelease / publishToMavenLocal 由插件在配置期注册，必须在 afterEvaluate 里挂依赖。
+afterEvaluate {
+    tasks.named('assembleRelease') { dependsOn 'fattenReleaseAar' }
+    tasks.named('publishToMavenLocal') { dependsOn 'fattenReleaseAar' }
 }

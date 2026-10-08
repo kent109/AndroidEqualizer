@@ -8,15 +8,19 @@ import java.io.Serializable;
 
 public class EqualizerModel implements Serializable {
     private boolean isEqualizerEnabled;
-    private int[]   seekbarpos = new int[5];
-    private int     presetPos;
-    private short   reverbPreset;
-    private short   bassStrength;
+    private int[] seekbarpos = new int[10];
+    private int presetPos;
+    private short reverbPreset;
+    private short bassStrength;
 
     public EqualizerModel() {
         isEqualizerEnabled = true;
-        reverbPreset       = -1;
-        bassStrength       = -1;
+        // 默认值必须落在系统合法范围内：
+        // - reverbPreset: PresetReverb.PRESET_NONE = 0（合法范围 [0, 6]）
+        // - bassStrength: 0（合法范围 [0, 1000]）
+        // 否则 BassBoost.setProperties / PresetReverb.setPreset 会抛 RuntimeException 导致 crash。
+        reverbPreset = 0;
+        bassStrength = 0;
     }
 
     public boolean isEqualizerEnabled() {
