@@ -101,6 +101,9 @@ public class EqualizerFragment extends Fragment {
      */
     private static final String[] PRESET_NAMES = EqualizerPresets.PRESET_NAMES;
 
+    /** 虚拟音效旋钮原始刻度上限（0=关闭，19=最大），见 {@link #reverbAnchorProgress(int)} */
+    public static final int REVERB_MAX_PROGRESS = 19;
+
     static int themeColor = Color.parseColor("#B24242");
     public Equalizer mEqualizer;
     SwitchCompat equalizerSwitch;
@@ -337,7 +340,7 @@ public class EqualizerFragment extends Fragment {
 
             if (presetReverb != null) {
                 try {
-                    y = (presetReverb.getPreset() * 19) / 6;
+                    y = reverbAnchorProgress(presetReverb.getPreset());
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -345,7 +348,7 @@ public class EqualizerFragment extends Fragment {
 
         } else {
             x = ((Settings.bassStrength * 19) / 1000);
-            y = (Settings.reverbPreset * 19) / 6;
+            y = reverbAnchorProgress(Settings.reverbPreset);
             int bass = Settings.loadBassProgress(ctx);
             if (bass >= 0) {
                 x = bass;
@@ -401,6 +404,9 @@ public class EqualizerFragment extends Fragment {
                     e.printStackTrace();
                 }
             }
+            // 虚拟音效实际生效路径是 App 内 FDN 软件混响（处理器内部 46ms 参数渐变，
+            // 天然平滑）：旋钮拖动必须实时按原始刻度经 Bridge 下发，同档内微调也有渐变
+            TenBandEqBridge.applySurroundLevel(p);
             y = p;
         });
 
@@ -738,10 +744,25 @@ public class EqualizerFragment extends Fragment {
      * @return true 表示已应用到运行时音效；false 表示仅写入了持久化数据
      */
     public boolean applyImportedConfig(int[] bandLevels, short bassStrength, short reverbPreset) {
+        return applyImportedConfig(bandLevels, bassStrength, reverbPreset,
+                reverbAnchorProgress(reverbPreset));
+    }
+
+    /**
+     * 导入配置（带虚拟音效精确刻度）。
+     *
+     * @param reverbProgress 虚拟音效旋钮原始刻度（0 ~ 19）；传 -1 表示无精确刻度，
+     *                       按 {@code reverbPreset} 的区间中心锚点落位
+     */
+    public boolean applyImportedConfig(int[] bandLevels, short bassStrength, short reverbPreset,
+                                       int reverbProgress) {
         if (bandLevels == null || bandLevels.length != NUM_BANDS) {
             Log.e(TAG, "applyImportedConfig: invalid bandLevels (len="
                     + (bandLevels == null ? "null" : bandLevels.length) + ")");
             return false;
+        }
+        if (reverbProgress < 0) {
+            reverbProgress = reverbAnchorProgress(reverbPreset);
         }
 
         // 1. 持久化写入
@@ -755,9 +776,7 @@ public class EqualizerFragment extends Fragment {
         if (bassProgress > 19) bassProgress = 19;
         Settings.saveBassProgress(ctx, bassProgress);
 
-        int reverbProgress = (int) Math.round(((float) reverbPreset) * 19.0 / 6.0);
-        if (reverbProgress < 0) reverbProgress = 0;
-        if (reverbProgress > 19) reverbProgress = 19;
+        if (reverbProgress > REVERB_MAX_PROGRESS) reverbProgress = REVERB_MAX_PROGRESS;
         Settings.saveReverbProgress(ctx, reverbProgress);
 
         // 2. 同步 Settings 静态字段
@@ -786,6 +805,12 @@ public class EqualizerFragment extends Fragment {
         if (!isAudioEffectsAvailable ||
                 equalizerSwitch == null || !equalizerSwitch.isChecked()) {
             Log.d(TAG, "applyImportedConfig: EQ switch off, persisted only");
+            // 页面未关闭时旋钮指针也要显示导入的精确刻度（无音效可应用，仅刷视觉；
+            // 频段 seekbar 等待下次开关由 refreshFromSettingsOnEnable 统一恢复）
+            if (reverbController != null) {
+                reverbController.setProgress(reverbProgress == 0 ? -2 : reverbProgress);
+                reverbController.invalidate();
+            }
             return false;
         }
 
@@ -867,6 +892,11 @@ public class EqualizerFragment extends Fragment {
                 presetReverb.setPreset(PresetReverb.PRESET_NONE);
             }
         }
+        // 虚拟音效按原始刻度直发 App 内 FDN 软件混响（处理器内部 46ms 参数渐变，天然
+        // 平滑）。必须放在上方 PresetReverb.setEnabled 之后：app 侧 applier 收到回调时
+        // 会顺带强制 disable 系统混响（软件环绕取代之，防双份尾音），先后顺序颠倒会
+        // 让 enable 覆盖 disable。
+        TenBandEqBridge.applySurroundLevel(reverbProgress);
         // AnalogController 仅更新可视化指针位置（其 listener 只在 touch 时触发，不会重复写入）。
         // 进度为 0 时沿用 onViewCreated 的约定：setProgress(-2) 表示指针垂直向下（中立位）。
         if (bassController != null) {
@@ -917,10 +947,10 @@ public class EqualizerFragment extends Fragment {
         // 4) 虚拟：优先用持久化的旋钮进度，缺失时从 Settings.reverbPreset 反推
         int reverbProgress = Settings.loadReverbProgress(ctx);
         if (reverbProgress < 0) {
-            reverbProgress = (int) Math.round(((float) clampReverbPreset(Settings.reverbPreset)) * 19.0 / 6.0);
+            reverbProgress = reverbAnchorProgress(clampReverbPreset(Settings.reverbPreset));
         }
         if (reverbProgress < 0) reverbProgress = 0;
-        if (reverbProgress > 19) reverbProgress = 19;
+        if (reverbProgress > REVERB_MAX_PROGRESS) reverbProgress = REVERB_MAX_PROGRESS;
         short reverbPreset = (short) ((reverbProgress * 6) / 19);
 
         // 5) 将最终应用的值同步回 Settings / EqualizerModel / 持久化，保持三方一致
@@ -958,6 +988,25 @@ public class EqualizerFragment extends Fragment {
             return PresetReverb.PRESET_NONE;
         }
         return value;
+    }
+
+    /**
+     * 预设（0~6）→ 该档刻度区间的中心刻度（0~19）。
+     * 派生公式为 {@code preset = level * 6 / 19}（整数除法），各预设的刻度区间是
+     * {0..3}/{4..6}/{7..9}/{10..12}/{13..15}/{16..18}/{19}；取区间中心才能保证
+     * 中心刻度经派生公式原样映射回同一预设（NONE 特判为 0=关闭）。
+     * 旧反推公式 {@code round(preset * 19 / 6)} 与派生公式互逆不一致，
+     * 会把预设 1/2 落到相邻档（预设 1 → 刻度 3 → 派生回 0）。
+     */
+    public static int reverbAnchorProgress(int preset) {
+        int p = Math.max(0, Math.min(6, preset));
+        if (p == 0) {
+            return 0;
+        }
+        if (p == 6) {
+            return REVERB_MAX_PROGRESS;
+        }
+        return ((p * 2 + 1) * REVERB_MAX_PROGRESS + 6) / 12;
     }
 
     /**

@@ -32,8 +32,8 @@ afterEvaluate {
             release(MavenPublication) {
                 from components.release
                 groupId = 'com.github.kent109'
-                artifactId = 'equalizer'
-                version = '1.0.0'
+                artifactId = 'AndroidEqualizer'
+                version = '1.0.1'
             }
         }
     }

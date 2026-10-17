@@ -37,6 +37,16 @@ public final class TenBandEqBridge {
 
     private static volatile BassStrengthApplier sBassApplier;
 
+    /**
+     * 由 app 模块实现的虚拟音效强度应用器（旋钮原始刻度 0-19，
+     * app 内 FDN 软件混响在 0-6 预设锚点间连续插值）。
+     */
+    public interface SurroundApplier {
+        void applySurroundLevel(int level);
+    }
+
+    private static volatile SurroundApplier sSurroundApplier;
+
     private TenBandEqBridge() {
     }
 
@@ -46,6 +56,25 @@ public final class TenBandEqBridge {
 
     public static void setBassApplier(BassStrengthApplier applier) {
         sBassApplier = applier;
+    }
+
+    public static void setSurroundApplier(SurroundApplier applier) {
+        sSurroundApplier = applier;
+    }
+
+    /**
+     * 把虚拟音效旋钮原始刻度（0-19）应用到 app 内软件混响。
+     * 调用方：EqualizerFragment 虚拟旋钮拖动 / 配置导入 / 开关恢复。
+     */
+    public static void applySurroundLevel(int level) {
+        SurroundApplier applier = sSurroundApplier;
+        if (applier != null) {
+            try {
+                applier.applySurroundLevel(level);
+            } catch (Exception e) {
+                Log.e(TAG, "applySurroundLevel failed", e);
+            }
+        }
     }
 
     /**
