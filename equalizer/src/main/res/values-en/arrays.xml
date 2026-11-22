@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="genre_arr">
+        <item>Custom</item>
+        <item>Flat</item>
+        <item>Pop</item>
+        <item>Rock</item>
+        <item>Jazz</item>
+        <item>Classical</item>
+        <item>Dance</item>
+        <item>Heavy Metal</item>
+        <item>Hip-Hop</item>
+        <item>Folk</item>
+        <item>Vocal</item>
+        <item>Electronic</item>
+        <item>Blues</item>
+        <item>Original Soundtrack</item>
+        <item>Bass</item>
+        <item>High Pitch</item>
+        <item>Country</item>
+        <item>Reggae</item>
+        <item>R&amp;B</item>
+        <item>Funk</item>
+        <item>Latin</item>
+        <item>New Age</item>
+        <item>Punk</item>
+        <item>Party</item>
+        <item>Podcast</item>
+        <item>Concert Hall</item>
+    </string-array>
+</resources>

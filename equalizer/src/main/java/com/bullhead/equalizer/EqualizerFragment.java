@@ -90,16 +90,11 @@ public class EqualizerFragment extends Fragment {
     };
 
     /**
-     * 内置 10 段预设（毫贝 mB），索引与 {@link #PRESET_NAMES} 对应。
+     * 内置 10 段预设（毫贝 mB），索引与预设名称资源 {@code R.array.genre_arr} 对应。
      * 第 0 项为"自定义"占位（不会被作为预设应用，仅用于 Spinner 显示）。
      * 预设表统一维护在 {@link EqualizerPresets}，供 MusicService 冷启动恢复时共用。
      */
     private static final int[][] PRESET_LEVELS = EqualizerPresets.PRESET_LEVELS;
-
-    /**
-     * 预设名称列表（Spinner 显示顺序，position 0 = 自定义）。
-     */
-    private static final String[] PRESET_NAMES = EqualizerPresets.PRESET_NAMES;
 
     /** 虚拟音效旋钮原始刻度上限（0=关闭，19=最大），见 {@link #reverbAnchorProgress(int)} */
     public static final int REVERB_MAX_PROGRESS = 19;
@@ -322,8 +317,8 @@ public class EqualizerFragment extends Fragment {
         bassController = view.findViewById(R.id.controllerBass);
         reverbController = view.findViewById(R.id.controller3D);
 
-        bassController.setLabel("低音增强");
-        reverbController.setLabel("虚拟音效");
+        bassController.setLabel(getString(R.string.bass_enhance));
+        reverbController.setLabel(getString(R.string.virtual_3d));
 
         updateComponentColors(Settings.isEqualizerEnabled);
 
@@ -1114,8 +1109,9 @@ public class EqualizerFragment extends Fragment {
         };
         equalizerPresetSpinnerAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item);
 
-        // 使用内置 10 段预设名（不再读 mEqualizer.getNumberOfPresets / getPresetName）
-        equalizerPresetNames.addAll(Arrays.asList(PRESET_NAMES));
+        // 预设名称取自资源 genre_arr（随系统语言切换，含中/英文），顺序与 PRESET_LEVELS 索引一一对应
+        equalizerPresetNames.addAll(Arrays.asList(
+                getResources().getStringArray(R.array.genre_arr)));
 
         presetSpinner.setAdapter(equalizerPresetSpinnerAdapter);
         //presetSpinner.setDropDownWidth((Settings.screen_width * 3) / 4);

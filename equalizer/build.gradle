@@ -33,7 +33,7 @@ afterEvaluate {
                 from components.release
                 groupId = 'com.github.kent109'
                 artifactId = 'AndroidEqualizer'
-                version = '1.0.1'
+                version = '1.0.2'
             }
         }
     }

@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">equalizer</string>
+    <string name="eq">Equalizer</string>
+
+    <string name="bass_enhance">Bass</string>
+    <string name="virtual_3d">3D</string>
+</resources>
