@@ -317,8 +317,8 @@ public class EqualizerFragment extends Fragment {
         bassController = view.findViewById(R.id.controllerBass);
         reverbController = view.findViewById(R.id.controller3D);
 
-        bassController.setLabel(getString(R.string.bass_enhance));
-        reverbController.setLabel(getString(R.string.virtual_3d));
+        bassController.setLabel(getString(R.string.bass_boost));
+        reverbController.setLabel(getString(R.string.virtualizer));
 
         updateComponentColors(Settings.isEqualizerEnabled);
 

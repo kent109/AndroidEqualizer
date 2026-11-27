@@ -2,6 +2,6 @@
     <string name="app_name">equalizer</string>
     <string name="eq">Equalizer</string>
 
-    <string name="bass_enhance">Bass</string>
-    <string name="virtual_3d">3D</string>
+    <string name="bass_boost">Bass boost</string>
+    <string name="virtualizer">Virtualizer</string>
 </resources>

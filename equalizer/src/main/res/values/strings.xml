@@ -2,6 +2,6 @@
     <string name="app_name">equalizer</string>
     <string name="eq">Equalizer</string>
 
-    <string name="bass_enhance">低音增强</string>
-    <string name="virtual_3d">虚拟音效</string>
+    <string name="bass_boost">低音增强</string>
+    <string name="virtualizer">虚拟音效</string>
 </resources>
